@@ -1,0 +1,15 @@
+artifact_uri: file:///home/jakob/code/jahlah/TaxiFareModel/mlruns/1/b7ab4f3f8d0b4b11b58e60338e3d156b/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: b7ab4f3f8d0b4b11b58e60338e3d156b
+run_uuid: b7ab4f3f8d0b4b11b58e60338e3d156b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1645534910572
+status: 1
+tags: []
+user_id: unknown
