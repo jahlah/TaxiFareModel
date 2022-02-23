@@ -1,4 +1,5 @@
 # imports
+from re import M
 from typing_extensions import Self
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -12,20 +13,24 @@ from memoized_property import memoized_property
 import mlflow
 from  mlflow.tracking import MlflowClient
 
-from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_validate
+
+from sklearn.linear_model import LinearRegression, SGDRegressor
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, Lasso
 
 
 Models = {
     "LinearRegression": LinearRegression(),
     "RandomForrest": RandomForestRegressor(),
-    "Ridge": Ridge()
+    "Ridge": Ridge(),
+    "Lasso": Lasso(),
+    "SGDRegressor": SGDRegressor()
 }
 
 class Trainer():
 
-    def __init__(self, X, y, model= None):
+    def __init__(self, X, y, model= "RandomForest"):
         """
             X: pandas DataFrame
             y: pandas Series
@@ -34,7 +39,10 @@ class Trainer():
         self.X = X
         self.y = y
         self.experiment_name = "[DE] [Berlin] [jahlah] TaxiFare v1"
-        self.model = Models[model]
+        self.model_name = model
+        self.model = RandomForestRegressor()
+        #self.model = Models[model]
+
 
     def set_pipeline(self):
         """defines the pipeline as a class attribute"""
@@ -52,19 +60,15 @@ class Trainer():
         ], remainder="drop")
         pipe = Pipeline([
             ('preproc', preproc_pipe),
-            (self.experiment_name, self.model)
+            (self.model_name, self.model)
         ])
-        self.mlflow_log_param("Model", "LinearRegression")
 
         self.pipeline = pipe
-
 
     def run(self):
         """set and train the pipeline"""
         self.set_pipeline()
         self.pipeline.fit(self.X, self.y)
-
-
 
     def evaluate(self, X_test, y_test):
         """evaluates the pipeline on df_test and return the RMSE"""
@@ -72,9 +76,6 @@ class Trainer():
         rmse = compute_rmse(y_pred, y_test)
         #print(rmse)
         return rmse
-
-
-
 
     @memoized_property
     def mlflow_client(self):
@@ -109,18 +110,36 @@ if __name__ == "__main__":
     X = df.drop("fare_amount", axis = 1)
     # hold out
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    # train
-    trainer = Trainer(X_train, y_train, "LinearRegression")
-    trainer.run()
-    # evaluate
-    rmse = trainer.evaluate(X_test, y_test)
-    trainer.mlflow_log_param("model", trainer.model)
-    trainer.mlflow_log_metric("rmse", rmse)
 
-    #for model in []:
+    # Run for just one model to test
+    # train
+    #trainer = Trainer(X_train, y_train, "LinearRegression")
+    #trainer.run()
+    # evaluate
+    #rmse = trainer.evaluate(X_test, y_test)
+    #trainer.mlflow_log_param("model", trainer.model_name)
+    #trainer.mlflow_log_metric("rmse", rmse)
+
+    # Run multiple models to find best model tpye
+    #for model in Models:
     #    trainer = Trainer(X_train, y_train, model)
     #    trainer.run()
     #    rmse = trainer.evaluate(X_test, y_test)
 
-    #    trainer.mlflow_log_param("model", trainer.experiment_name)
+    #    trainer.mlflow_log_param("model", trainer.model_name)
     #    trainer.mlflow_log_metric("rmse", rmse)
+
+    # Cross validation for model selection
+    for model in Models:
+        trainer = Trainer(X_train, y_train, model)
+        trainer.set_pipeline()
+        cv = cross_validate(trainer.pipeline,
+                            X_train,
+                            y_train,
+                            cv = 5,
+                            n_jobs = -1,
+                            scoring = ("r2", "neg_mean_squared_error"))
+
+        rmse = float(cv["test_neg_mean_squared_error"].mean())
+        trainer.mlflow_log_param("model", trainer.model_name)
+        trainer.mlflow_log_metric("CV rmse", rmse)
